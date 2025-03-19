@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-ankify",
+  "name": "Ankify",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "使用DeepSeek API将Obsidian笔记转换为Anki卡片",
+  "author": "Your Name",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}

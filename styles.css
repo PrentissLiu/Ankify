@@ -1,0 +1,248 @@
+/* 结果模态框样式 */
+.ankify-result-container {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.ankify-result-container pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace);
+}
+
+/* 可编辑的结果文本区域 */
+.ankify-editable-result {
+  width: 100%;
+  height: 300px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace);
+  border: none;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  resize: vertical;
+  padding: 8px;
+}
+
+/* 按钮容器样式 */
+.ankify-button-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ankify-button-container button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ankify-button-container button:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+/* 卡片选择界面样式 */
+.ankify-anki-settings {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+}
+
+.ankify-setting-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ankify-setting-item label {
+  margin-right: 10px;
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.ankify-setting-item select {
+  flex: 1;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.ankify-cards-container {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.ankify-select-all {
+  padding: 10px;
+  background-color: var(--background-secondary);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ankify-select-all input {
+  margin-right: 8px;
+}
+
+.ankify-cards-list {
+  padding: 10px;
+}
+
+.ankify-card {
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  display: flex;
+}
+
+.ankify-card-checkbox {
+  margin-right: 10px;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+.ankify-card-content {
+  flex: 1;
+}
+
+.ankify-card-question,
+.ankify-card-answer,
+.ankify-card-annotation,
+.ankify-card-tags {
+  margin-bottom: 5px;
+}
+
+.ankify-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-right: 5px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.ankify-primary-button {
+  background-color: var(--interactive-success) !important;
+}
+
+.ankify-error {
+  color: var(--text-error);
+  padding: 5px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.ankify-raw-result {
+  margin-top: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 10px;
+}
+
+/* 设置面板样式 */
+.setting-item textarea {
+  font-family: var(--font-monospace);
+  width: 100%;
+}
+
+/* 加载提示样式 */
+.ankify-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ankify-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 模态框样式 */
+.ankify-modal {
+  background-color: var(--background-primary);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+}
+
+.ankify-modal .modal-title {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: var(--text-normal);
+}
+
+.ankify-modal .modal-content {
+  max-height: calc(80vh - 100px);
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.ankify-modal .modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ankify-modal .modal-content::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 4px;
+}
+
+.ankify-modal .modal-content::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+.ankify-modal .modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-normal);
+}
+
+/* 答案和注释分隔线样式 */
+.ankify-separator {
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 10px 0;
+}
+
+.ankify-annotation-label {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.ankify-annotation-content {
+  background-color: var(--background-secondary);
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 5px;
+}
