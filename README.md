@@ -9,6 +9,13 @@
 - 支持个性化提示词设置
 - 便捷的复制功能，方便导入到 Anki
 
+## 效果展示
+
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/9335edc7-8815-4a97-b294-c171809a2e91" />
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/0acaf79c-4603-4a08-bddd-8d595b7605ba" />
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/c39aafa4-f3c9-4ad2-b74c-f2889146fe22" />
+<img width="640" alt="image" src="https://github.com/user-attachments/assets/b75ebbdd-cb6e-47f7-99f8-38d436d83bea" />
+
 ## 安装
 
 ### 手动安装
