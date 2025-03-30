@@ -589,7 +589,7 @@ class SelectableCardsModal extends Modal {
         text: this.rawResult,
       });
       textAreaEl.style.width = "100%";
-      textAreaEl.style.height = "200px";
+      textAreaEl.style.height = "100px";
 
       const buttonContainer = contentEl.createDiv({
         cls: "ankify-button-container",
@@ -751,27 +751,60 @@ class SelectableCardsModal extends Modal {
       // 卡片内容展示
       const cardContent = cardEl.createDiv({ cls: "ankify-card-content" });
 
+      // 问题编辑
       const questionEl = cardContent.createDiv({ cls: "ankify-card-question" });
       questionEl.createEl("strong", { text: "问题: " });
-      questionEl.createSpan({ text: card.question });
+      const questionInput = questionEl.createEl("input", {
+        cls: "ankify-card-input",
+        type: "text",
+        value: card.question,
+      });
+      questionInput.addEventListener("change", () => {
+        this.cards[index].question = questionInput.value;
+      });
 
+      // 答案编辑
       const answerEl = cardContent.createDiv({ cls: "ankify-card-answer" });
       answerEl.createEl("strong", { text: "答案: " });
-      answerEl.createSpan({ text: card.answer });
+      const answerInput = answerEl.createEl("input", {
+        cls: "ankify-card-input",
+        type: "text",
+        value: card.answer,
+      });
+      answerInput.addEventListener("change", () => {
+        this.cards[index].answer = answerInput.value;
+      });
 
+      // 注释编辑
       if (card.annotation) {
         const annotationEl = cardContent.createDiv({
           cls: "ankify-card-annotation",
         });
         annotationEl.createEl("strong", { text: "注释: " });
-        annotationEl.createSpan({ text: card.annotation });
+        const annotationInput = annotationEl.createEl("input", {
+          cls: "ankify-card-input",
+          type: "text",
+          value: card.annotation,
+        });
+        annotationInput.addEventListener("change", () => {
+          this.cards[index].annotation = annotationInput.value;
+        });
       }
 
+      // 标签编辑
       if (card.tags && card.tags.length > 0) {
         const tagsEl = cardContent.createDiv({ cls: "ankify-card-tags" });
         tagsEl.createEl("strong", { text: "标签: " });
-        card.tags.forEach((tag) => {
-          tagsEl.createEl("span", { cls: "ankify-tag", text: tag });
+        const tagsInput = tagsEl.createEl("input", {
+          cls: "ankify-card-input",
+          type: "text",
+          value: card.tags.join(" "),
+        });
+        tagsInput.addEventListener("change", () => {
+          this.cards[index].tags = tagsInput.value
+            .split(/\s+/)
+            .map((tag) => tag.trim())
+            .filter((tag) => tag.length > 0);
         });
       }
     });
@@ -905,7 +938,7 @@ class AnkifySettingTab extends PluginSettingTab {
             .onChange(async (value) => {
               this.plugin.settings.customPrompt = value;
               await this.plugin.saveSettings();
-            }).inputEl.style.minHeight = "150px")
+            }).inputEl.style.minHeight = "80px")
       );
 
     // 新增设置：是否直接插入文档
