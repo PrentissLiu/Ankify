@@ -19,7 +19,12 @@ interface AnkiCard {
 
 // 默认设置
 interface AnkifySettings {
+  // API设置
+  apiModel: string; // 选择的API模型
   deepseekApiKey: string;
+  openaiApiKey: string;
+  claudeApiKey: string;
+  // 通用设置
   customPrompt: string;
   insertToDocument: boolean; // 是否直接插入文档而不是弹窗
   ankiConnectUrl: string; // Anki Connect API地址
@@ -28,7 +33,12 @@ interface AnkifySettings {
 }
 
 const DEFAULT_SETTINGS: AnkifySettings = {
+  // API设置
+  apiModel: "deepseek", // 默认使用DeepSeek
   deepseekApiKey: "",
+  openaiApiKey: "",
+  claudeApiKey: "",
+  // 通用设置
   customPrompt:
     '请基于以下内容创建Anki卡片，格式为"问题:::答案"，每个卡片一行。提取关键概念和知识点。\n\n',
   insertToDocument: false, // 默认使用弹窗
@@ -48,7 +58,7 @@ export default class AnkifyPlugin extends Plugin {
       id: "generate-anki-cards",
       name: "生成Anki卡片",
       editorCallback: (editor: Editor, view: MarkdownView) => {
-        this.processContentWithDeepseek(editor, view);
+        this.processContent(editor, view);
       },
     });
 
@@ -59,7 +69,7 @@ export default class AnkifyPlugin extends Plugin {
     this.addRibbonIcon("dice", "Ankify选中内容", (evt: MouseEvent) => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView);
       if (view) {
-        this.processContentWithDeepseek(view.editor, view);
+        this.processContent(view.editor, view);
       } else {
         new Notice("请先打开一个Markdown文件");
       }
@@ -439,7 +449,7 @@ export default class AnkifyPlugin extends Plugin {
     }
   }
 
-  async processContentWithDeepseek(editor: Editor, view: MarkdownView) {
+  async processContent(editor: Editor, view: MarkdownView) {
     // 修改为处理选中的文本，而不是整篇文章
     const selectedText = editor.getSelection();
 
@@ -448,15 +458,27 @@ export default class AnkifyPlugin extends Plugin {
       return;
     }
 
-    if (!this.settings.deepseekApiKey) {
-      new Notice("请先设置DeepSeek API密钥");
+    // 检查选择的模型对应的API密钥是否已设置
+    let apiKey = "";
+    const model = this.settings.apiModel;
+    
+    if (model === "deepseek") {
+      apiKey = this.settings.deepseekApiKey;
+    } else if (model === "openai") {
+      apiKey = this.settings.openaiApiKey;
+    } else if (model === "claude") {
+      apiKey = this.settings.claudeApiKey;
+    }
+    
+    if (!apiKey) {
+      new Notice(`请先设置${model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : "Claude"} API密钥`);
       return;
     }
 
     new Notice("正在生成Anki卡片...");
 
     try {
-      const result = await this.callDeepseekAPI(selectedText);
+      const result = await this.callModelAPI(selectedText);
 
       if (this.settings.insertToDocument) {
         // 在文档末尾插入结果
@@ -467,7 +489,7 @@ export default class AnkifyPlugin extends Plugin {
         new SelectableCardsModal(this.app, cards, result, this, editor).open();
       }
     } catch (error) {
-      console.error("DeepSeek API调用失败:", error);
+      console.error("API调用失败:", error);
       new Notice("生成Anki卡片失败：" + error.message);
     }
   }
@@ -480,31 +502,68 @@ export default class AnkifyPlugin extends Plugin {
     new Notice("Anki卡片已添加到文档末尾");
   }
 
-  async callDeepseekAPI(content: string): Promise<string> {
+  async callModelAPI(content: string): Promise<string> {
     const prompt = this.settings.customPrompt + content;
     const startTime = Date.now();
+    const model = this.settings.apiModel;
+    let apiUrl = "";
+    let headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    let requestBody: any = {};
 
-    // DeepSeek API请求
-    const response = await fetch(
-      "https://api.deepseek.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.settings.deepseekApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat", // 使用合适的DeepSeek模型
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-        }),
-      }
-    );
+    // 根据选择的模型设置API请求参数
+    if (model === "deepseek") {
+      apiUrl = "https://api.deepseek.com/v1/chat/completions";
+      headers["Authorization"] = `Bearer ${this.settings.deepseekApiKey}`;
+      requestBody = {
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+      };
+    } else if (model === "openai") {
+      apiUrl = "https://api.openai.com/v1/chat/completions";
+      headers["Authorization"] = `Bearer ${this.settings.openaiApiKey}`;
+      requestBody = {
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+      };
+    } else if (model === "claude") {
+      apiUrl = "https://api.anthropic.com/v1/messages";
+      headers["x-api-key"] = this.settings.claudeApiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      requestBody = {
+        model: "claude-3-haiku-20240307",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0.7,
+      };
+    } else {
+      throw new Error("不支持的模型类型");
+    }
+
+    // 发送API请求
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(requestBody),
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -513,8 +572,17 @@ export default class AnkifyPlugin extends Plugin {
 
     const data = await response.json();
     const endTime = Date.now();
-    console.log(`DeepSeek API响应时间: ${endTime - startTime}ms`);
-    return data.choices[0]?.message?.content || "无法生成卡片内容";
+    console.log(`${model.toUpperCase()} API响应时间: ${endTime - startTime}ms`);
+    
+    // 根据不同API响应格式获取结果
+    let result = "";
+    if (model === "deepseek" || model === "openai") {
+      result = data.choices[0]?.message?.content || "无法生成卡片内容";
+    } else if (model === "claude") {
+      result = data.content[0]?.text || "无法生成卡片内容";
+    }
+    
+    return result;
   }
 }
 
@@ -912,18 +980,65 @@ class AnkifySettingTab extends PluginSettingTab {
 
     containerEl.createEl("h2", { text: "Ankify 插件设置" });
 
+    // API模型选择
     new Setting(containerEl)
-      .setName("DeepSeek API 密钥")
-      .setDesc("输入您的DeepSeek API密钥")
-      .addText((text) =>
-        text
-          .setPlaceholder("sk-...")
-          .setValue(this.plugin.settings.deepseekApiKey)
+      .setName("AI模型选择")
+      .setDesc("选择用于生成Anki卡片的AI模型")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("deepseek", "DeepSeek")
+          .addOption("openai", "OpenAI")
+          .addOption("claude", "Claude")
+          .setValue(this.plugin.settings.apiModel)
           .onChange(async (value) => {
-            this.plugin.settings.deepseekApiKey = value;
+            this.plugin.settings.apiModel = value;
             await this.plugin.saveSettings();
-          })
-      );
+            // 刷新设置页面以显示相应的API密钥设置
+            this.display();
+          });
+      });
+
+    // 根据选择的模型显示相应的API密钥设置
+    if (this.plugin.settings.apiModel === "deepseek") {
+      new Setting(containerEl)
+        .setName("DeepSeek API 密钥")
+        .setDesc("输入您的DeepSeek API密钥")
+        .addText((text) =>
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.deepseekApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.deepseekApiKey = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    } else if (this.plugin.settings.apiModel === "openai") {
+      new Setting(containerEl)
+        .setName("OpenAI API 密钥")
+        .setDesc("输入您的OpenAI API密钥")
+        .addText((text) =>
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.openaiApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.openaiApiKey = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    } else if (this.plugin.settings.apiModel === "claude") {
+      new Setting(containerEl)
+        .setName("Claude API 密钥")
+        .setDesc("输入您的Claude API密钥")
+        .addText((text) =>
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.claudeApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.claudeApiKey = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    }
 
     new Setting(containerEl)
       .setName("自定义Prompt")
