@@ -37,6 +37,10 @@ var DEFAULT_SETTINGS = {
   deepseekApiKey: "",
   openaiApiKey: "",
   claudeApiKey: "",
+  customApiUrl: "https://api.example.com/v1/chat/completions",
+  customApiKey: "",
+  customModelName: "custom-model",
+  customApiVersion: "",
   customPrompt: '\u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5185\u5BB9\u521B\u5EFAAnki\u5361\u7247\uFF0C\u683C\u5F0F\u4E3A"\u95EE\u9898:::\u7B54\u6848"\uFF0C\u6BCF\u4E2A\u5361\u7247\u4E00\u884C\u3002\u63D0\u53D6\u5173\u952E\u6982\u5FF5\u548C\u77E5\u8BC6\u70B9\u3002\n\n',
   insertToDocument: false,
   ankiConnectUrl: "http://127.0.0.1:8765",
@@ -323,9 +327,20 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       apiKey = this.settings.openaiApiKey;
     } else if (model === "claude") {
       apiKey = this.settings.claudeApiKey;
+    } else if (model === "custom") {
+      apiKey = this.settings.customApiKey;
+      if (!this.settings.customApiUrl) {
+        new import_obsidian.Notice("\u8BF7\u5148\u8BBE\u7F6E\u81EA\u5B9A\u4E49API URL");
+        return;
+      }
+      if (!this.settings.customModelName) {
+        new import_obsidian.Notice("\u8BF7\u5148\u8BBE\u7F6E\u81EA\u5B9A\u4E49\u6A21\u578B\u540D\u79F0");
+        return;
+      }
     }
     if (!apiKey) {
-      new import_obsidian.Notice(`\u8BF7\u5148\u8BBE\u7F6E${model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : "Claude"} API\u5BC6\u94A5`);
+      const modelName = model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : model === "claude" ? "Claude" : "\u81EA\u5B9A\u4E49API";
+      new import_obsidian.Notice(`\u8BF7\u5148\u8BBE\u7F6E${modelName}\u5BC6\u94A5`);
       return;
     }
     new import_obsidian.Notice("\u6B63\u5728\u751F\u6210Anki\u5361\u7247...");
@@ -349,7 +364,7 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
     new import_obsidian.Notice("Anki\u5361\u7247\u5DF2\u6DFB\u52A0\u5230\u6587\u6863\u672B\u5C3E");
   }
   async callModelAPI(content) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g;
     const prompt = this.settings.customPrompt + content;
     const startTime = Date.now();
     const model = this.settings.apiModel;
@@ -399,6 +414,47 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
         max_tokens: 1e3,
         temperature: 0.7
       };
+    } else if (model === "custom") {
+      apiUrl = this.settings.customApiUrl;
+      headers["Authorization"] = `Bearer ${this.settings.customApiKey}`;
+      if (this.settings.customApiVersion) {
+        headers["api-version"] = this.settings.customApiVersion;
+      }
+      if (apiUrl.includes("openai")) {
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.7
+        };
+      } else if (apiUrl.includes("anthropic")) {
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_tokens: 1e3,
+          temperature: 0.7
+        };
+      } else {
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.7
+        };
+      }
     } else {
       throw new Error("\u4E0D\u652F\u6301\u7684\u6A21\u578B\u7C7B\u578B");
     }
@@ -419,6 +475,19 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       result = ((_c = (_b = data.choices[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
     } else if (model === "claude") {
       result = ((_d = data.content[0]) == null ? void 0 : _d.text) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
+    } else if (model === "custom") {
+      if (data.choices && ((_f = (_e = data.choices[0]) == null ? void 0 : _e.message) == null ? void 0 : _f.content)) {
+        result = data.choices[0].message.content;
+      } else if (data.content && ((_g = data.content[0]) == null ? void 0 : _g.text)) {
+        result = data.content[0].text;
+      } else if (data.response) {
+        result = data.response;
+      } else if (data.text || data.content || data.result || data.output || data.generated_text) {
+        result = data.text || data.content || data.result || data.output || data.generated_text;
+      } else {
+        console.warn("\u65E0\u6CD5\u4ECEAPI\u54CD\u5E94\u4E2D\u63D0\u53D6\u5185\u5BB9\uFF0C\u8FD4\u56DE\u5B8C\u6574\u54CD\u5E94:", data);
+        result = JSON.stringify(data, null, 2);
+      }
     }
     return result;
   }
@@ -706,7 +775,7 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Ankify \u63D2\u4EF6\u8BBE\u7F6E" });
     new import_obsidian.Setting(containerEl).setName("AI\u6A21\u578B\u9009\u62E9").setDesc("\u9009\u62E9\u7528\u4E8E\u751F\u6210Anki\u5361\u7247\u7684AI\u6A21\u578B").addDropdown((dropdown) => {
-      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").setValue(this.plugin.settings.apiModel).onChange(async (value) => {
+      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").addOption("custom", "\u81EA\u5B9A\u4E49API").setValue(this.plugin.settings.apiModel).onChange(async (value) => {
         this.plugin.settings.apiModel = value;
         await this.plugin.saveSettings();
         this.display();
@@ -725,6 +794,24 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     } else if (this.plugin.settings.apiModel === "claude") {
       new import_obsidian.Setting(containerEl).setName("Claude API \u5BC6\u94A5").setDesc("\u8F93\u5165\u60A8\u7684Claude API\u5BC6\u94A5").addText((text) => text.setPlaceholder("sk-...").setValue(this.plugin.settings.claudeApiKey).onChange(async (value) => {
         this.plugin.settings.claudeApiKey = value;
+        await this.plugin.saveSettings();
+      }));
+    } else if (this.plugin.settings.apiModel === "custom") {
+      containerEl.createEl("h3", { text: "\u81EA\u5B9A\u4E49API\u8BBE\u7F6E" });
+      new import_obsidian.Setting(containerEl).setName("API URL").setDesc("\u8F93\u5165\u81EA\u5B9A\u4E49API\u7684\u5B8C\u6574URL").addText((text) => text.setPlaceholder("https://api.example.com/v1/chat/completions").setValue(this.plugin.settings.customApiUrl).onChange(async (value) => {
+        this.plugin.settings.customApiUrl = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(containerEl).setName("API \u5BC6\u94A5").setDesc("\u8F93\u5165\u81EA\u5B9A\u4E49API\u7684\u5BC6\u94A5").addText((text) => text.setPlaceholder("sk-...").setValue(this.plugin.settings.customApiKey).onChange(async (value) => {
+        this.plugin.settings.customApiKey = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(containerEl).setName("\u6A21\u578B\u540D\u79F0").setDesc("\u8F93\u5165\u8981\u4F7F\u7528\u7684\u6A21\u578B\u540D\u79F0").addText((text) => text.setPlaceholder("model-name").setValue(this.plugin.settings.customModelName).onChange(async (value) => {
+        this.plugin.settings.customModelName = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(containerEl).setName("API \u7248\u672C (\u53EF\u9009)").setDesc("\u5982\u679C\u9700\u8981\u6307\u5B9AAPI\u7248\u672C\uFF0C\u8BF7\u5728\u6B64\u8F93\u5165").addText((text) => text.setPlaceholder("\u4F8B\u5982\uFF1A2023-06-01").setValue(this.plugin.settings.customApiVersion).onChange(async (value) => {
+        this.plugin.settings.customApiVersion = value;
         await this.plugin.saveSettings();
       }));
     }

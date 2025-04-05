@@ -24,6 +24,11 @@ interface AnkifySettings {
   deepseekApiKey: string;
   openaiApiKey: string;
   claudeApiKey: string;
+  // 自定义API设置
+  customApiUrl: string;
+  customApiKey: string;
+  customModelName: string;
+  customApiVersion: string;
   // 通用设置
   customPrompt: string;
   insertToDocument: boolean; // 是否直接插入文档而不是弹窗
@@ -38,6 +43,11 @@ const DEFAULT_SETTINGS: AnkifySettings = {
   deepseekApiKey: "",
   openaiApiKey: "",
   claudeApiKey: "",
+  // 自定义API设置
+  customApiUrl: "https://api.example.com/v1/chat/completions",
+  customApiKey: "",
+  customModelName: "custom-model",
+  customApiVersion: "",
   // 通用设置
   customPrompt:
     '请基于以下内容创建Anki卡片，格式为"问题:::答案"，每个卡片一行。提取关键概念和知识点。\n\n',
@@ -468,10 +478,25 @@ export default class AnkifyPlugin extends Plugin {
       apiKey = this.settings.openaiApiKey;
     } else if (model === "claude") {
       apiKey = this.settings.claudeApiKey;
+    } else if (model === "custom") {
+      apiKey = this.settings.customApiKey;
+      // 检查自定义API URL
+      if (!this.settings.customApiUrl) {
+        new Notice("请先设置自定义API URL");
+        return;
+      }
+      // 检查自定义模型名称
+      if (!this.settings.customModelName) {
+        new Notice("请先设置自定义模型名称");
+        return;
+      }
     }
     
     if (!apiKey) {
-      new Notice(`请先设置${model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : "Claude"} API密钥`);
+      const modelName = model === "deepseek" ? "DeepSeek" : 
+                        model === "openai" ? "OpenAI" : 
+                        model === "claude" ? "Claude" : "自定义API";
+      new Notice(`请先设置${modelName}密钥`);
       return;
     }
 
@@ -554,6 +579,53 @@ export default class AnkifyPlugin extends Plugin {
         max_tokens: 1000,
         temperature: 0.7,
       };
+    } else if (model === "custom") {
+      // 使用自定义API设置
+      apiUrl = this.settings.customApiUrl;
+      headers["Authorization"] = `Bearer ${this.settings.customApiKey}`;
+      
+      // 如果有指定API版本，添加到请求头
+      if (this.settings.customApiVersion) {
+        headers["api-version"] = this.settings.customApiVersion;
+      }
+      
+      // 根据URL猜测API类型并设置合适的请求体
+      if (apiUrl.includes("openai")) {
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.7,
+        };
+      } else if (apiUrl.includes("anthropic")) {
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: 1000,
+          temperature: 0.7,
+        };
+      } else {
+        // 默认格式（类似OpenAI）
+        requestBody = {
+          model: this.settings.customModelName,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.7,
+        };
+      }
     } else {
       throw new Error("不支持的模型类型");
     }
@@ -580,6 +652,25 @@ export default class AnkifyPlugin extends Plugin {
       result = data.choices[0]?.message?.content || "无法生成卡片内容";
     } else if (model === "claude") {
       result = data.content[0]?.text || "无法生成卡片内容";
+    } else if (model === "custom") {
+      // 尝试从不同的响应结构中提取内容
+      if (data.choices && data.choices[0]?.message?.content) {
+        // OpenAI格式
+        result = data.choices[0].message.content;
+      } else if (data.content && data.content[0]?.text) {
+        // Claude格式
+        result = data.content[0].text;
+      } else if (data.response) {
+        // 某些API可能直接返回response字段
+        result = data.response;
+      } else if (data.text || data.content || data.result || data.output || data.generated_text) {
+        // 其他可能的字段名
+        result = data.text || data.content || data.result || data.output || data.generated_text;
+      } else {
+        // 找不到合适的字段，返回整个响应作为JSON字符串
+        console.warn("无法从API响应中提取内容，返回完整响应:", data);
+        result = JSON.stringify(data, null, 2);
+      }
     }
     
     return result;
@@ -989,6 +1080,7 @@ class AnkifySettingTab extends PluginSettingTab {
           .addOption("deepseek", "DeepSeek")
           .addOption("openai", "OpenAI")
           .addOption("claude", "Claude")
+          .addOption("custom", "自定义API")
           .setValue(this.plugin.settings.apiModel)
           .onChange(async (value) => {
             this.plugin.settings.apiModel = value;
@@ -1035,6 +1127,61 @@ class AnkifySettingTab extends PluginSettingTab {
             .setValue(this.plugin.settings.claudeApiKey)
             .onChange(async (value) => {
               this.plugin.settings.claudeApiKey = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    } else if (this.plugin.settings.apiModel === "custom") {
+      // 自定义API设置
+      containerEl.createEl("h3", { text: "自定义API设置" });
+      
+      new Setting(containerEl)
+        .setName("API URL")
+        .setDesc("输入自定义API的完整URL")
+        .addText((text) =>
+          text
+            .setPlaceholder("https://api.example.com/v1/chat/completions")
+            .setValue(this.plugin.settings.customApiUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.customApiUrl = value;
+              await this.plugin.saveSettings();
+            })
+        );
+        
+      new Setting(containerEl)
+        .setName("API 密钥")
+        .setDesc("输入自定义API的密钥")
+        .addText((text) =>
+          text
+            .setPlaceholder("sk-...")
+            .setValue(this.plugin.settings.customApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.customApiKey = value;
+              await this.plugin.saveSettings();
+            })
+        );
+        
+      new Setting(containerEl)
+        .setName("模型名称")
+        .setDesc("输入要使用的模型名称")
+        .addText((text) =>
+          text
+            .setPlaceholder("model-name")
+            .setValue(this.plugin.settings.customModelName)
+            .onChange(async (value) => {
+              this.plugin.settings.customModelName = value;
+              await this.plugin.saveSettings();
+            })
+        );
+        
+      new Setting(containerEl)
+        .setName("API 版本 (可选)")
+        .setDesc("如果需要指定API版本，请在此输入")
+        .addText((text) =>
+          text
+            .setPlaceholder("例如：2023-06-01")
+            .setValue(this.plugin.settings.customApiVersion)
+            .onChange(async (value) => {
+              this.plugin.settings.customApiVersion = value;
               await this.plugin.saveSettings();
             })
         );
