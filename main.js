@@ -37,6 +37,7 @@ var DEFAULT_SETTINGS = {
   deepseekApiKey: "",
   openaiApiKey: "",
   claudeApiKey: "",
+  geminiApiKey: "", // [Gemini] 1. 添加 Gemini API 密钥的默认设置
   customApiUrl: "https://api.example.com/v1/chat/completions",
   customApiKey: "",
   customModelName: "custom-model",
@@ -164,8 +165,8 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
           if (!line)
             continue;
           let parts;
-          if (line.includes("	")) {
-            parts = line.split("	");
+          if (line.includes(" ")) {
+            parts = line.split("  ");
           } else {
             parts = line.split(/\s{2,}/);
           }
@@ -327,6 +328,8 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       apiKey = this.settings.openaiApiKey;
     } else if (model === "claude") {
       apiKey = this.settings.claudeApiKey;
+    } else if (model === "gemini") { // [Gemini] 2. 添加 Gemini API 密钥检查
+      apiKey = this.settings.geminiApiKey;
     } else if (model === "custom") {
       apiKey = this.settings.customApiKey;
       if (!this.settings.customApiUrl) {
@@ -339,7 +342,8 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       }
     }
     if (!apiKey) {
-      const modelName = model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : model === "claude" ? "Claude" : "\u81EA\u5B9A\u4E49API";
+      // [Gemini] 2.1 添加 "Gemini" 到提示消息
+      const modelName = model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : model === "claude" ? "Claude" : model === "gemini" ? "Gemini" : "\u81EA\u5B9A\u4E49API";
       new import_obsidian.Notice(`\u8BF7\u5148\u8BBE\u7F6E${modelName}\u5BC6\u94A5`);
       return;
     }
@@ -414,6 +418,30 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
         max_tokens: 1e3,
         temperature: 0.7
       };
+    } else if (model === "gemini") { // [Gemini] 3. 添加 Gemini API 的请求逻辑
+      // 你可以把这里的 "gemini-1.5-flash-latest" 换成你的 "gemini-2.5-flash"
+      const geminiModel = "gemini-2.5-flash";
+      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${this.settings.geminiApiKey}`;
+      
+      // Gemini 的 API Key 是在 URL 参数中，Headers 里不需要 Authorization
+      headers = {
+        "Content-Type": "application/json"
+      };
+      
+      // Gemini 的请求体结构 (contents) 和 OpenAI/Claude (messages) 不同
+      requestBody = {
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              { "text": prompt }
+            ]
+          }
+        ],
+        "generationConfig": {
+          "temperature": 0.7
+        }
+      };
     } else if (model === "custom") {
       apiUrl = this.settings.customApiUrl;
       headers["Authorization"] = `Bearer ${this.settings.customApiKey}`;
@@ -465,7 +493,8 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
     });
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(((_a = errorData.error) == null ? void 0 : _a.message) || "\u8BF7\u6C42\u5931\u8D25");
+      console.error("API Error Response:", errorData); // 打印详细错误
+      throw new Error(((_a = errorData.error) == null ? void 0 : _a.message) || `\u8BF7\u6C42\u5931\u8D25: ${errorData.message || response.statusText}`);
     }
     const data = await response.json();
     const endTime = Date.now();
@@ -475,6 +504,18 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       result = ((_c = (_b = data.choices[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
     } else if (model === "claude") {
       result = ((_d = data.content[0]) == null ? void 0 : _d.text) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
+    } else if (model === "gemini") { // [Gemini] 3.1 添加 Gemini 响应的解析逻辑
+      try {
+        // Gemini 的响应结构是 data.candidates[0].content.parts[0].text
+        result = data.candidates[0].content.parts[0].text;
+      } catch (e) {
+        console.error("Error parsing Gemini response:", e, data);
+        if (data.promptFeedback && data.promptFeedback.blockReason) {
+          result = `\u5185\u5BB9\u88ABGemini\u5B89\u5168\u7B56\u7565\u62E6\u622A: ${data.promptFeedback.blockReason}`;
+        } else {
+          result = "\u65E0\u6CD5\u89E3\u6790Gemini\u54CD\u5E94";
+        }
+      }
     } else if (model === "custom") {
       if (data.choices && ((_f = (_e = data.choices[0]) == null ? void 0 : _e.message) == null ? void 0 : _f.content)) {
         result = data.choices[0].message.content;
@@ -775,7 +816,7 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Ankify \u63D2\u4EF6\u8BBE\u7F6E" });
     new import_obsidian.Setting(containerEl).setName("AI\u6A21\u578B\u9009\u62E9").setDesc("\u9009\u62E9\u7528\u4E8E\u751F\u6210Anki\u5361\u7247\u7684AI\u6A21\u578B").addDropdown((dropdown) => {
-      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").addOption("custom", "\u81EA\u5B9A\u4E49API").setValue(this.plugin.settings.apiModel).onChange(async (value) => {
+      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").addOption("gemini", "Gemini").addOption("custom", "\u81EA\u5B9A\u4E49API").setValue(this.plugin.settings.apiModel).onChange(async (value) => { // [Gemini] 4. 在下拉菜单中添加 "Gemini"
         this.plugin.settings.apiModel = value;
         await this.plugin.saveSettings();
         this.display();
@@ -794,6 +835,11 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     } else if (this.plugin.settings.apiModel === "claude") {
       new import_obsidian.Setting(containerEl).setName("Claude API \u5BC6\u94A5").setDesc("\u8F93\u5165\u60A8\u7684Claude API\u5BC6\u94A5").addText((text) => text.setPlaceholder("sk-...").setValue(this.plugin.settings.claudeApiKey).onChange(async (value) => {
         this.plugin.settings.claudeApiKey = value;
+        await this.plugin.saveSettings();
+      }));
+    } else if (this.plugin.settings.apiModel === "gemini") { // [Gemini] 4.1 添加 Gemini API 密钥输入框
+      new import_obsidian.Setting(containerEl).setName("Gemini API \u5BC6\u94A5").setDesc("\u8F93\u5165\u60A8\u7684 Google AI Studio Gemini API \u5BC6\u94A5").addText((text) => text.setPlaceholder("...").setValue(this.plugin.settings.geminiApiKey).onChange(async (value) => {
+        this.plugin.settings.geminiApiKey = value;
         await this.plugin.saveSettings();
       }));
     } else if (this.plugin.settings.apiModel === "custom") {
