@@ -840,7 +840,7 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     } else if (this.plugin.settings.apiModel === "gemini") { // [Gemini] 4.1 添加 Gemini API 密钥输入框
       new import_obsidian.Setting(containerEl).setName("Gemini API \u5BC6\u94A5").setDesc("\u8F93\u5165\u60A8\u7684 Google AI Studio Gemini API \u5BC6\u94A5").addText((text) => text.setPlaceholder("...").setValue(this.plugin.settings.geminiApiKey).onChange(async (value) => {
         this.plugin.settings.geminiApiKey = value;
-        await this.plugin.saveSettings();
+        await this.plugin.saveSettings(); // [Gemini - FIX] 补上这一行来保存设置
       }));
     } else if (this.plugin.settings.apiModel === "custom") {
       containerEl.createEl("h3", { text: "\u81EA\u5B9A\u4E49API\u8BBE\u7F6E" });
