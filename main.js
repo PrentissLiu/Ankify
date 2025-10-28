@@ -37,12 +37,12 @@ var DEFAULT_SETTINGS = {
   deepseekApiKey: "",
   openaiApiKey: "",
   claudeApiKey: "",
-  geminiApiKey: "", // [Gemini] 1. 添加 Gemini API 密钥的默认设置
+  geminiApiKey: "",
   customApiUrl: "https://api.example.com/v1/chat/completions",
   customApiKey: "",
   customModelName: "custom-model",
   customApiVersion: "",
-  customPrompt: '\u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5185\u5BB9\u521B\u5EFAAnki\u5361\u7247\uFF0C\u683C\u5F0F\u4E3A"\u95EE\u9898:::\u7B54\u6848"\uFF0C\u6BCF\u4E2A\u5361\u7247\u4E00\u884C\u3002\u63D0\u53D6\u5173\u952E\u6982\u5FF5\u548C\u77E5\u8BC6\u70B9\u3002\n\n',
+  customPrompt: '\u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5185\u5BB9\u521B\uEFAAnki\u5361\u7247\uFF0C\u683C\u5F0F\u4E3A"\u95EE\u9898:::\u7B54\u6848"\uFF0C\u6BCF\u4E2A\u5361\u7247\u4E00\u884C\u3002\u63D0\u53D6\u5173\u952E\u6982\u5FF5\u548C\u77E5\u8BC6\u70B9\u3002\n\n',
   insertToDocument: false,
   ankiConnectUrl: "http://127.0.0.1:8765",
   defaultDeck: "Default",
@@ -118,6 +118,14 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       return await this.invokeAnkiConnect("modelNames");
     } catch (error) {
       console.error("\u83B7\u53D6\u7B14\u8BB0\u7C7B\u578B\u5217\u8868\u5931\u8D25:", error);
+      return [];
+    }
+  }
+  async getTags() {
+    try {
+      return await this.invokeAnkiConnect("getTags");
+    } catch (error) {
+      console.error("\u83B7\u53D6\u6807\u7B7E\u5217\u8868\u5931\u8D25:", error);
       return [];
     }
   }
@@ -328,7 +336,7 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       apiKey = this.settings.openaiApiKey;
     } else if (model === "claude") {
       apiKey = this.settings.claudeApiKey;
-    } else if (model === "gemini") { // [Gemini] 2. 添加 Gemini API 密钥检查
+    } else if (model === "gemini") {
       apiKey = this.settings.geminiApiKey;
     } else if (model === "custom") {
       apiKey = this.settings.customApiKey;
@@ -342,7 +350,6 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       }
     }
     if (!apiKey) {
-      // [Gemini] 2.1 添加 "Gemini" 到提示消息
       const modelName = model === "deepseek" ? "DeepSeek" : model === "openai" ? "OpenAI" : model === "claude" ? "Claude" : model === "gemini" ? "Gemini" : "\u81EA\u5B9A\u4E49API";
       new import_obsidian.Notice(`\u8BF7\u5148\u8BBE\u7F6E${modelName}\u5BC6\u94A5`);
       return;
@@ -418,17 +425,12 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
         max_tokens: 1e3,
         temperature: 0.7
       };
-    } else if (model === "gemini") { // [Gemini] 3. 添加 Gemini API 的请求逻辑
-      // 你可以把这里的 "gemini-1.5-flash-latest" 换成你的 "gemini-2.5-flash"
+    } else if (model === "gemini") {
       const geminiModel = "gemini-2.5-flash";
       apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${this.settings.geminiApiKey}`;
-      
-      // Gemini 的 API Key 是在 URL 参数中，Headers 里不需要 Authorization
       headers = {
         "Content-Type": "application/json"
       };
-      
-      // Gemini 的请求体结构 (contents) 和 OpenAI/Claude (messages) 不同
       requestBody = {
         "contents": [
           {
@@ -493,7 +495,7 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
     });
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("API Error Response:", errorData); // 打印详细错误
+      console.error("API Error Response:", errorData);
       throw new Error(((_a = errorData.error) == null ? void 0 : _a.message) || `\u8BF7\u6C42\u5931\u8D25: ${errorData.message || response.statusText}`);
     }
     const data = await response.json();
@@ -504,9 +506,8 @@ var AnkifyPlugin = class extends import_obsidian.Plugin {
       result = ((_c = (_b = data.choices[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
     } else if (model === "claude") {
       result = ((_d = data.content[0]) == null ? void 0 : _d.text) || "\u65E0\u6CD5\u751F\u6210\u5361\u7247\u5185\u5BB9";
-    } else if (model === "gemini") { // [Gemini] 3.1 添加 Gemini 响应的解析逻辑
+    } else if (model === "gemini") {
       try {
-        // Gemini 的响应结构是 data.candidates[0].content.parts[0].text
         result = data.candidates[0].content.parts[0].text;
       } catch (e) {
         console.error("Error parsing Gemini response:", e, data);
@@ -543,10 +544,91 @@ var SelectableCardsModal = class extends import_obsidian.Modal {
     this.selectedCards = cards.map(() => true);
     this.deckName = plugin.settings.defaultDeck;
     this.noteType = plugin.settings.defaultNoteType;
+    this.globalTagsArray = []; // [Tags-UI] 1. 将 globalTags 字符串改成 globalTagsArray 数组
+    this.allAnkiTags = [];
+  }
+  // [Tags-UI] 2. 添加一个辅助函数来创建和添加标签"药丸"
+  addTag(tagText) {
+    const tag = tagText.trim().replace(/[\s,]/g, ""); // 清理标签，移除空格和逗号
+    if (!tag || this.globalTagsArray.includes(tag)) {
+      this.tagsInput.value = ""; // 无论如何都清空输入框
+      return; // 如果标签为空或已存在，则不添加
+    }
+    this.globalTagsArray.push(tag);
+    const pill = this.tagsInputWrapper.createEl("span", {
+      cls: "ankify-tag-pill"
+    });
+    pill.createEl("span", { text: tag });
+    const deleteBtn = pill.createEl("span", {
+      cls: "ankify-tag-delete",
+      text: "\xD7"
+      // '×'
+    });
+    deleteBtn.addEventListener("click", () => {
+      this.globalTagsArray = this.globalTagsArray.filter((t) => t !== tag);
+      pill.remove();
+    });
+    this.tagsInputWrapper.insertBefore(pill, this.tagsInput); // 将"药丸"插入到输入框之前
+    this.tagsInput.value = ""; // 清空输入框
   }
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+    
+    // [Tags-UI] 3. 注入 "药丸" UI 所需的 CSS 样式
+    const styleEl = contentEl.createEl("style");
+    styleEl.innerHTML = `
+      .ankify-setting-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .ankify-setting-item label {
+        flex-basis: 100px; /* 固定标签宽度 */
+        flex-shrink: 0;
+        margin-right: 10px;
+      }
+      .ankify-setting-item select, .ankify-tags-input-wrapper {
+        flex-grow: 1; /* 让下拉框和标签输入框占满剩余空间 */
+        width: auto;
+      }
+      .ankify-tags-input-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 5px;
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 5px;
+        background-color: var(--background-primary);
+      }
+      .ankify-tag-pill {
+        display: inline-flex;
+        align-items: center;
+        background-color: var(--background-secondary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 4px;
+        padding: 2px 6px;
+        margin: 2px;
+        font-size: 0.9em;
+      }
+      .ankify-tag-delete {
+        margin-left: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        padding: 0 3px;
+      }
+      .ankify-tag-delete:hover {
+        color: var(--text-error);
+      }
+      .ankify-tags-input-wrapper input {
+        border: none;
+        outline: none;
+        background-color: transparent;
+        padding: 4px;
+        flex-grow: 1;
+        min-width: 150px; /* 保证输入框有最小宽度 */
+      }
+    `;
     this.modalEl.style.position = "fixed";
     this.modalEl.style.top = "50%";
     this.modalEl.style.left = "50%";
@@ -600,8 +682,15 @@ var SelectableCardsModal = class extends import_obsidian.Modal {
     }
     const ankiSettingsEl = contentEl.createDiv({ cls: "ankify-anki-settings" });
     let decks = [];
+    let noteTypes = [];
+    let tags = [];
     try {
-      decks = await this.plugin.getDeckNames();
+      [decks, noteTypes, tags] = await Promise.all([
+        this.plugin.getDeckNames(),
+        this.plugin.getNoteTypes(),
+        this.plugin.getTags()
+      ]);
+      this.allAnkiTags = tags;
     } catch (error) {
       ankiSettingsEl.createEl("p", {
         cls: "ankify-error",
@@ -633,7 +722,6 @@ var SelectableCardsModal = class extends import_obsidian.Modal {
     this.deckSelect.addEventListener("change", () => {
       this.deckName = this.deckSelect.value;
     });
-    const noteTypes = await this.plugin.getNoteTypes();
     const noteTypeContainer = ankiSettingsEl.createDiv({
       cls: "ankify-setting-item"
     });
@@ -671,6 +759,44 @@ var SelectableCardsModal = class extends import_obsidian.Modal {
     this.noteTypeSelect.addEventListener("change", () => {
       this.noteType = this.noteTypeSelect.value;
     });
+    
+    // [Tags-UI] 4. 创建新的标签 UI
+    const tagsContainer = ankiSettingsEl.createDiv({
+      cls: "ankify-setting-item"
+    });
+    tagsContainer.createEl("label", { text: "\u6DFB\u52A0\u6807\u7B7E\uFF1A" });
+    
+    // 这个是 "药丸" UI 的主容器
+    this.tagsInputWrapper = tagsContainer.createDiv({
+      cls: "ankify-tags-input-wrapper"
+    });
+    
+    // 这个是 "药丸" UI 内部的真实 <input> 元素
+    this.tagsInput = this.tagsInputWrapper.createEl("input", {
+      type: "text",
+      attr: {
+        placeholder: "\u8F93\u5165\u6807\u7B7E\u540E\u6309\u56DE\u8F66...",
+        list: "ankify-tags-list"
+      }
+    });
+
+    const datalistEl = contentEl.createEl("datalist", {
+      attr: { id: "ankify-tags-list" }
+    });
+    if (this.allAnkiTags.length > 0) {
+      this.allAnkiTags.forEach((tag) => {
+        datalistEl.createEl("option", { value: tag });
+      });
+    }
+    
+    // [Tags-UI] 5. 添加键盘事件监听器，用 "Enter" 键来创建"药丸"
+    this.tagsInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault(); // 阻止回车键的默认行为 (比如提交表单)
+        this.addTag(this.tagsInput.value); // 调用辅助函数添加"药丸"
+      }
+    });
+
     const cardsContainer = contentEl.createDiv({
       cls: "ankify-cards-container"
     });
@@ -756,14 +882,33 @@ var SelectableCardsModal = class extends import_obsidian.Modal {
       text: "\u6DFB\u52A0\u5230Anki"
     });
     addToAnkiButton.addEventListener("click", async () => {
-      const selectedCardsList = this.cards.filter((_, index) => this.selectedCards[index]);
+      // [Tags-UI] 6. 修改 "添加到Anki" 按钮的逻辑
+      
+      // 1. 检查输入框里是否还有未按回车的标签
+      const remainingInputTag = this.tagsInput.value.trim();
+      if (remainingInputTag) {
+        this.addTag(remainingInputTag); // 如果有，也把它添加为"药丸"
+      }
+      
+      // 2. 过滤所选卡片，并合并标签
+      const selectedCardsList = this.cards
+        .filter((_, index) => this.selectedCards[index])
+        .map(card => {
+          const existingTags = card.tags || [];
+          // 3. 使用 this.globalTagsArray (而不是解析字符串) 来合并标签
+          const mergedTags = [...new Set([...existingTags, ...this.globalTagsArray])];
+          return { ...card, tags: mergedTags };
+        });
+
       if (selectedCardsList.length === 0) {
         new import_obsidian.Notice("\u8BF7\u81F3\u5C11\u9009\u62E9\u4E00\u5F20\u5361\u7247");
         return;
       }
       try {
         const loadingNotice = new import_obsidian.Notice("\u6B63\u5728\u6DFB\u52A0\u5361\u7247\u5230Anki...", 0);
+        
         const result = await this.plugin.addNotesToAnki(selectedCardsList, this.deckName, this.noteType);
+        
         this.plugin.settings.defaultDeck = this.deckName;
         this.plugin.settings.defaultNoteType = this.noteType;
         await this.plugin.saveSettings();
@@ -816,7 +961,7 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Ankify \u63D2\u4EF6\u8BBE\u7F6E" });
     new import_obsidian.Setting(containerEl).setName("AI\u6A21\u578B\u9009\u62E9").setDesc("\u9009\u62E9\u7528\u4E8E\u751F\u6210Anki\u5361\u7247\u7684AI\u6A21\u578B").addDropdown((dropdown) => {
-      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").addOption("gemini", "Gemini").addOption("custom", "\u81EA\u5B9A\u4E49API").setValue(this.plugin.settings.apiModel).onChange(async (value) => { // [Gemini] 4. 在下拉菜单中添加 "Gemini"
+      dropdown.addOption("deepseek", "DeepSeek").addOption("openai", "OpenAI").addOption("claude", "Claude").addOption("gemini", "Gemini").addOption("custom", "\u81EA\u5B9A\u4E49API").setValue(this.plugin.settings.apiModel).onChange(async (value) => {
         this.plugin.settings.apiModel = value;
         await this.plugin.saveSettings();
         this.display();
@@ -837,10 +982,10 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings.claudeApiKey = value;
         await this.plugin.saveSettings();
       }));
-    } else if (this.plugin.settings.apiModel === "gemini") { // [Gemini] 4.1 添加 Gemini API 密钥输入框
+    } else if (this.plugin.settings.apiModel === "gemini") {
       new import_obsidian.Setting(containerEl).setName("Gemini API \u5BC6\u94A5").setDesc("\u8F93\u5165\u60A8\u7684 Google AI Studio Gemini API \u5BC6\u94A5").addText((text) => text.setPlaceholder("...").setValue(this.plugin.settings.geminiApiKey).onChange(async (value) => {
         this.plugin.settings.geminiApiKey = value;
-        await this.plugin.saveSettings(); // [Gemini - FIX] 补上这一行来保存设置
+        await this.plugin.saveSettings();
       }));
     } else if (this.plugin.settings.apiModel === "custom") {
       containerEl.createEl("h3", { text: "\u81EA\u5B9A\u4E49API\u8BBE\u7F6E" });
@@ -861,7 +1006,7 @@ var AnkifySettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       }));
     }
-    new import_obsidian.Setting(containerEl).setName("\u81EA\u5B9A\u4E49Prompt").setDesc("\u8BBE\u7F6E\u751F\u6210Anki\u5361\u7247\u7684\u63D0\u793A\u8BCD").addTextArea((text) => text.setPlaceholder('\u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5185\u5BB9\u521B\u5EFAAnki\u5361\u7247\uFF0C\u683C\u5F0F\u4E3A"\u95EE\u9898:::\u7B54\u6848"...').setValue(this.plugin.settings.customPrompt).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u81EA\u5B9A\u4E49Prompt").setDesc("\u8BBE\u7F6E\u751F\u6210Anki\u5361\u7247\u7684\u63D0\u793A\u8BCD").addTextArea((text) => text.setPlaceholder('\u8BF7\u57FA\u4E8E\u4EE5\u4E0B\u5185\u5BB9\u521B\uEFAAnki\u5361\u7247\uFF0C\u683C\u5F0F\u4E3A"\u95EE\u9898:::\u7B54\u6848"...').setValue(this.plugin.settings.customPrompt).onChange(async (value) => {
       this.plugin.settings.customPrompt = value;
       await this.plugin.saveSettings();
     }).inputEl.style.minHeight = "80px");
